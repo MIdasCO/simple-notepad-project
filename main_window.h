@@ -1,6 +1,8 @@
 #ifndef MAIN_WINDOW_H
 #define MAIN_WINDOW_H
 
+#include "spell_checker.h"
+#include "spell_checker_highlighter.h"
 #include "text_transform.h"
 
 #include <QDialog>
@@ -28,6 +30,8 @@ private:
     void setup_format_toolbar();
     void setup_search_menu();
     void setup_tools_menu();
+    void setup_spell_checker();
+    void show_spell_suggestion_menu(const QPoint& position);
 
     void open_file();
     void save_file();
@@ -51,6 +55,8 @@ private:
     QTextEdit* editor { nullptr };
     QString current_file;
     std::vector<std::unique_ptr<text_transform>> transforms;
+    spell_checker checker;
+    std::unique_ptr<spell_checker_highlighter> checker_highlighter;
 
     QDialog* find_replace_dlg { nullptr };
     std::unique_ptr<Ui::find_replace_dialog> find_replace_ui;

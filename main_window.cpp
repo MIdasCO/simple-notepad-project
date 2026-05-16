@@ -15,10 +15,12 @@
 #include <QHeaderView>
 #include <QKeySequence>
 #include <QMenuBar>
+#include <QMenu>
 #include <QRegularExpression>
 #include <QStatusBar>
 #include <QTableWidgetItem>
 #include <QTextCharFormat>
+#include <QTextCursor>
 #include <QTextDocument>
 #include <QTextStream>
 #include <QToolBar>
@@ -50,6 +52,7 @@ main_window::main_window()
     setup_search_menu();
     setup_tools_menu();
     setup_status_bar();
+    setup_spell_checker();
 }
 
 main_window::~main_window() = default;
@@ -196,6 +199,15 @@ void main_window::setup_tools_menu()
     connect(action_word_freq, &QAction::triggered, this, [this] {
         show_word_frequency();
     });
+
+    tools_menu->addSeparator();
+
+    const auto* action_spell_check = tools_menu->addAction("Check Spelling...");
+    connect(action_spell_check, &QAction::triggered, this, [this] {
+        if (checker_highlighter) {
+            checker_highlighter->rehighlight();
+        }
+    });
 }
 
 void main_window::apply_transform(const text_transform& transform) const
@@ -299,6 +311,55 @@ void main_window::update_word_line_count() const
     const int words = text.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts).size();
     const int lines = text.isEmpty() ? 1 : (text.count('\n') + 1);
     statusBar()->showMessage(QString("Words: %1  Lines: %2").arg(words).arg(lines));
+}
+
+void main_window::setup_spell_checker()
+{
+    if (!checker.load_from_file("data/words.txt")) {
+        QMessageBox::critical(this, "Error", "Failed to load data/words.txt");
+        return;
+    }
+
+    checker_highlighter = std::make_unique<spell_checker_highlighter>(editor->document(), &checker);
+
+    editor->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(editor, &QWidget::customContextMenuRequested, this, [this](const QPoint& position) {
+        show_spell_suggestion_menu(position);
+    });
+}
+
+void main_window::show_spell_suggestion_menu(const QPoint& position)
+{
+    QTextCursor cursor = editor->cursorForPosition(position);
+    cursor.select(QTextCursor::WordUnderCursor);
+    const QString selected_word = cursor.selectedText();
+
+    if (selected_word.isEmpty() || checker.is_correct_word(selected_word)) {
+        std::unique_ptr<QMenu> menu(editor->createStandardContextMenu());
+        menu->exec(editor->viewport()->mapToGlobal(position));
+        return;
+    }
+
+    QMenu menu(this);
+    const auto suggestions = checker.suggest(selected_word, 5);
+    if (suggestions.empty()) {
+        auto* no_suggestion = menu.addAction("No suggestions");
+        no_suggestion->setEnabled(false);
+    } else {
+        for (const auto& suggestion : suggestions) {
+            auto* action = menu.addAction(QString::fromStdString(suggestion));
+            connect(action, &QAction::triggered, this, [this, cursor, suggestion] {
+                QTextCursor replace_cursor = cursor;
+                replace_cursor.insertText(QString::fromStdString(suggestion));
+                editor->setTextCursor(replace_cursor);
+            });
+        }
+    }
+
+    menu.addSeparator();
+    std::unique_ptr<QMenu> standard_menu(editor->createStandardContextMenu());
+    menu.addActions(standard_menu->actions());
+    menu.exec(editor->viewport()->mapToGlobal(position));
 }
 
 void main_window::show_find_replace_dialog()
