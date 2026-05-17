@@ -9,6 +9,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QCoreApplication>
 #include <QFile>
 #include <QFileDialog>
 #include <QFont>
@@ -315,8 +316,27 @@ void main_window::update_word_line_count() const
 
 void main_window::setup_spell_checker()
 {
-    if (!checker.load_from_file("data/words.txt")) {
-        QMessageBox::critical(this, "Error", "Failed to load data/words.txt");
+    QStringList candidates;
+    candidates << "data/words.txt";
+    candidates << QCoreApplication::applicationDirPath() + "/data/words.txt";
+    candidates << QCoreApplication::applicationDirPath() + "/../data/words.txt";
+
+    bool loaded = false;
+    QString loadedPath;
+    for (const QString& p : candidates) {
+        if (checker.load_from_file(p)) {
+            loaded = true;
+            loadedPath = p;
+            break;
+        }
+    }
+
+    if (!loaded) {
+        QString msg = "Failed to load data/words.txt. Tried:\n";
+        for (const auto& p : candidates) {
+            msg += p + "\n";
+        }
+        QMessageBox::critical(this, "Error", msg);
         return;
     }
 
