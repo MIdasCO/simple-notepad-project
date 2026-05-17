@@ -13,6 +13,7 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFont>
+#include <QFontDialog>
 #include <QHeaderView>
 #include <QKeySequence>
 #include <QMenuBar>
@@ -50,6 +51,7 @@ main_window::main_window()
     setup_edit_menu();
     setup_format_menu();
     setup_format_toolbar();
+    setup_view_menu();
     setup_search_menu();
     setup_tools_menu();
     setup_status_bar();
@@ -139,6 +141,16 @@ void main_window::setup_format_menu()
             apply_transform(*transform);
         });
     }
+
+    format_menu->addSeparator();
+    auto* action_font = format_menu->addAction("Font...");
+    connect(action_font, &QAction::triggered, this, [this] {
+        bool ok = false;
+        const QFont selected = QFontDialog::getFont(&ok, editor->currentFont(), this, "Font"); // тут короче говоря через метод QFontDialog::getFont открывается диалог выбора шрифта, и если пользователь нажимает "OK", то переменная ok становится true, и тогда мы применяем выбранный шрифт к редактору текста с помощью метода apply_font_to_editor(selected)
+        if (ok) {
+            apply_font_to_editor(selected);
+        }
+    });
 }
 
 void main_window::setup_format_toolbar()
@@ -192,6 +204,23 @@ void main_window::setup_search_menu()
     });
 }
 
+void main_window::setup_view_menu()
+{
+    auto* view_menu = menuBar()->addMenu("View");
+
+    auto* action_zoom_in = view_menu->addAction("Zoom In");
+    action_zoom_in->setShortcut(QKeySequence::ZoomIn);
+    connect(action_zoom_in, &QAction::triggered, this, &main_window::zoom_in);
+
+    auto* action_zoom_out = view_menu->addAction("Zoom Out");
+    action_zoom_out->setShortcut(QKeySequence::ZoomOut);
+    connect(action_zoom_out, &QAction::triggered, this, &main_window::zoom_out);
+
+    auto* action_reset_zoom = view_menu->addAction("Reset Zoom");
+    action_reset_zoom->setShortcut(QKeySequence("Ctrl+0"));
+    connect(action_reset_zoom, &QAction::triggered, this, &main_window::reset_zoom);
+}
+
 void main_window::setup_tools_menu()
 {
     auto* tools_menu = menuBar()->addMenu("Tools");
@@ -231,6 +260,46 @@ void main_window::apply_transform(const text_transform& transform) const
         }
     }
     cursor.endEditBlock();
+}
+
+void main_window::apply_font_to_editor(const QFont& font) const
+{
+    QTextCursor cursor = editor->textCursor();
+    QTextCharFormat fmt;
+    fmt.setFont(font);
+
+    if (cursor.hasSelection()) {
+        cursor.mergeCharFormat(fmt);
+        editor->mergeCurrentCharFormat(fmt);
+        return;
+    }
+
+    cursor.select(QTextCursor::Document);
+    cursor.mergeCharFormat(fmt);
+    editor->mergeCurrentCharFormat(fmt);
+}
+
+void main_window::zoom_in()
+{
+    editor->zoomIn(1);
+    ++zoom_steps;
+}
+
+void main_window::zoom_out()
+{
+    editor->zoomOut(1);
+    --zoom_steps;
+}
+
+void main_window::reset_zoom()
+{
+    if (zoom_steps > 0) {
+        editor->zoomOut(zoom_steps);
+    } else if (zoom_steps < 0) {
+        editor->zoomIn(-zoom_steps);
+    }
+
+    zoom_steps = 0;
 }
 
 void main_window::open_file()
@@ -303,6 +372,9 @@ void main_window::setup_status_bar()
     connect(editor, &QTextEdit::textChanged, this, [this] {
         update_word_line_count();
     });
+    connect(editor, &QTextEdit::cursorPositionChanged, this, [this] {
+        update_word_line_count();
+    });
     update_word_line_count();
 }
 
@@ -311,7 +383,15 @@ void main_window::update_word_line_count() const
     const QString text = editor->toPlainText();
     const int words = text.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts).size();
     const int lines = text.isEmpty() ? 1 : (text.count('\n') + 1);
-    statusBar()->showMessage(QString("Words: %1  Lines: %2").arg(words).arg(lines));
+    const QTextCursor cursor = editor->textCursor();
+    const int line = cursor.blockNumber() + 1;
+    const int column = cursor.positionInBlock() + 1;
+    statusBar()->showMessage(
+        QString("Words: %1  Lines: %2  Current_Line: %3  Column: %4")
+            .arg(words)
+            .arg(lines)
+            .arg(line)
+            .arg(column));
 }
 
 void main_window::setup_spell_checker()

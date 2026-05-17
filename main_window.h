@@ -30,6 +30,7 @@ private:
     void setup_format_toolbar();
     void setup_search_menu();
     void setup_tools_menu();
+    void setup_view_menu();
     void setup_spell_checker();
     void show_spell_suggestion_menu(const QPoint& position);
 
@@ -40,6 +41,11 @@ private:
 
     void setup_status_bar();
     void update_word_line_count() const;
+    void apply_font_to_editor(const QFont& font) const;
+
+    void zoom_in();
+    void zoom_out();
+    void reset_zoom();
 
     void apply_transform(const text_transform& transform) const;
 
@@ -57,6 +63,7 @@ private:
     std::vector<std::unique_ptr<text_transform>> transforms;
     spell_checker checker;
     std::unique_ptr<spell_checker_highlighter> checker_highlighter;
+    int zoom_steps { 0 };
 
     QDialog* find_replace_dlg { nullptr };
     std::unique_ptr<Ui::find_replace_dialog> find_replace_ui;
